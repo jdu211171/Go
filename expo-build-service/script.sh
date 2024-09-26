@@ -3,31 +3,29 @@
 SERVER_IP="192.168.0.106"
 AUTH_TOKEN="your-secret-token"
 
-# Start the build
-echo "Starting the build..."
-RESPONSE=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" -X POST http://$SERVER_IP:8080/build)
-BUILD_ID=$(echo $RESPONSE | jq -r '.build_id')
+# Temporary file to store the response body
+TMP_RESPONSE=$(mktemp)
 
-# Poll for build status
-STATUS="in_progress"
-while [ "$STATUS" == "in_progress" ]; do
-    sleep 60  # Wait for 30 seconds before checking again
-    RESPONSE=$(curl -s -H "Authorization: Bearer $AUTH_TOKEN" http://$SERVER_IP:8080/build/status?build_id=$BUILD_ID)
-    STATUS=$(echo $RESPONSE | jq -r '.status')
-    ERROR=$(echo $RESPONSE | jq -r '.error')
-    echo "Build status: $STATUS"
-    if [ "$STATUS" == "error" ]; then
-        echo "Build failed with error: $ERROR"
-        exit 1
-    fi
-done
+# Start the build and download the APK
+echo "Starting the build and downloading the APK..."
 
-# Download the APK
-if [ "$STATUS" == "completed" ]; then
-    echo "Downloading the APK..."
-    curl -H "Authorization: Bearer $AUTH_TOKEN" http://$SERVER_IP:8080/build/download?build_id=$BUILD_ID -o app.apk
+HTTP_STATUS=$(curl -s -w "%{http_code}" \
+     -H "Authorization: Bearer $AUTH_TOKEN" \
+     -H "Content-Type: application/json" \
+     -X POST http://$SERVER_IP:8080/build \
+     -d '{
+           "repo_url": "https://github.com/yourusername/your-repo.git",
+           "platform": "android"
+         }' \
+     -o app.apk)
+
+if [ "$HTTP_STATUS" -eq 200 ]; then
     echo "APK downloaded as app.apk"
+    rm -f $TMP_RESPONSE
 else
-    echo "Unexpected build status: $STATUS"
+    echo "Failed to build the app. HTTP status code: $HTTP_STATUS"
+    echo "Server response:"
+    cat app.apk  # Output the server's error message
+    rm -f app.apk
     exit 1
 fi

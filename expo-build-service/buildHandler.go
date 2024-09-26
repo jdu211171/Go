@@ -1,13 +1,159 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 )
+
+type BuildRequest struct {
+	RepoURL  string `json:"repo_url"`
+	Platform string `json:"platform"`
+}
+
+func generateTimestampID() string {
+	timestamp := time.Now().Format("20060102-1504") // YearMonthDay-HourMinute
+	return timestamp
+}
+
+func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
+	// Validate input to prevent command injection or path traversal attacks
+	if strings.Contains(repoURL, ";") || strings.Contains(repoURL, "&") {
+		return fmt.Errorf("invalid repoURL parameter")
+	}
+
+	// Clone the repository
+	cloneCmd := exec.CommandContext(ctx, "git", "clone", repoURL, clonePath)
+	if output, err := cloneCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
+	}
+
+	return nil
+}
+
+func buildApp(ctx context.Context, clonePath, platform, outputFile string) error {
+	// Validate the platform
+	validPlatforms := map[string]bool{"android": true, "ios": true}
+	if !validPlatforms[platform] {
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+
+	// Build the app using EAS CLI
+	buildCmd := exec.CommandContext(ctx, "eas", "build", "--platform", platform, "--local", "--output", outputFile)
+	buildCmd.Dir = clonePath
+	buildCmd.Env = os.Environ() // Inherit the environment
+
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error building app: %v, output: %s", err, string(output))
+	}
+
+	// Check if the built file exists
+	builtFilePath := filepath.Join(clonePath, outputFile)
+	if _, err := os.Stat(builtFilePath); os.IsNotExist(err) {
+		return fmt.Errorf("built app file not found at %s", builtFilePath)
+	}
+
+	return nil
+}
+
+func buildHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)
+	defer cancel()
+
+	var req BuildRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input
+	if req.RepoURL == "" || req.Platform == "" {
+		http.Error(w, "Missing required parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Generate a timestamp-based ID for this build
+	buildID := generateTimestampID()
+
+	// Create a temporary directory for this build
+	tempDir, err := os.MkdirTemp("", "build-"+buildID)
+	if err != nil {
+		log.Println("Failed to create temporary directory:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(tempDir) // Clean up after build
+
+	clonePath := filepath.Join(tempDir, "repo")
+
+	// Clone the repository
+	if err := cloneOrUpdateRepo(ctx, req.RepoURL, clonePath); err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to clone the repository", http.StatusInternalServerError)
+		return
+	}
+
+	// Define the output file based on the platform and build ID
+	var outputFile, contentType, outputFilename string
+	switch req.Platform {
+	case "android":
+		outputFilename = fmt.Sprintf("app-%s.apk", buildID)
+		outputFile = outputFilename
+		contentType = "application/vnd.android.package-archive"
+	case "ios":
+		outputFilename = fmt.Sprintf("app-%s.ipa", buildID)
+		outputFile = outputFilename
+		contentType = "application/octet-stream"
+	}
+
+	// Build the app
+	if err := buildApp(ctx, clonePath, req.Platform, outputFile); err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to build the app", http.StatusInternalServerError)
+		return
+	}
+
+	// Serve the built app
+	builtFilePath := filepath.Join(clonePath, outputFile)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outputFilename))
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize(builtFilePath)))
+
+	// Stream the file to the client
+	file, err := os.Open(builtFilePath)
+	if err != nil {
+		log.Println("Failed to open built file:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(w, file); err != nil {
+		log.Println("Failed to send file to client:", err)
+	}
+}
+
+func fileSize(filePath string) int64 {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+func main() {
+	http.HandleFunc("/build", authenticate(buildHandler))
+	fmt.Println("Server started at :8080")
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
+}
 
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -18,84 +164,4 @@ func authenticate(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
-}
-
-func buildHandler(w http.ResponseWriter, r *http.Request) {
-	repoURL := "https://github.com/jdu211171/parents-monolithic.git"
-	clonePath := "~/parents-monolithic/parent-notification"
-
-	// Check if the repository exists
-	if _, err := os.Stat(clonePath); os.IsNotExist(err) {
-		// Clone the repository
-		cloneCmd := exec.Command("git", "clone", repoURL, clonePath)
-		if output, err := cloneCmd.CombinedOutput(); err != nil {
-			log.Printf("Error cloning repository: %s", string(output))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		// Reset any local changes
-		resetCmd := exec.Command("git", "-C", clonePath, "reset", "--hard")
-		if output, err := resetCmd.CombinedOutput(); err != nil {
-			log.Printf("Error resetting repository: %s", string(output))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-
-		// Pull the latest changes
-		pullCmd := exec.Command("git", "-C", clonePath, "pull")
-		if output, err := pullCmd.CombinedOutput(); err != nil {
-			log.Printf("Error pulling repository: %s", string(output))
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Remove existing APK files in the clonePath
-	apkPattern := filepath.Join(clonePath, "*.apk")
-	apkFiles, err := filepath.Glob(apkPattern)
-	if err != nil {
-		log.Printf("Error finding existing APK files: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	for _, apkFile := range apkFiles {
-		err := os.Remove(apkFile)
-		if err != nil {
-			log.Printf("Error removing APK file %s: %v", apkFile, err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Build the Expo app
-	buildCmd := exec.Command("eas", "build", "--platform", "android", "--local", "--output", "./app.apk")
-	buildCmd.Dir = clonePath
-	buildCmd.Env = append(os.Environ(), "PATH=/usr/bin/eas")
-	if output, err := buildCmd.CombinedOutput(); err != nil {
-		log.Printf("Error building project: %s", string(output))
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Path to the built APK file
-	builtFilePath := filepath.Join(clonePath, "app.apk")
-
-	// Check if the APK file exists
-	if _, err := os.Stat(builtFilePath); os.IsNotExist(err) {
-		log.Printf("Built APK file not found at %s", builtFilePath)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	// Send the built file back to the client
-	w.Header().Set("Content-Disposition", "attachment; filename=app.apk")
-	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
-	http.ServeFile(w, r, builtFilePath)
-}
-
-func main() {
-	http.HandleFunc("/build", authenticate(buildHandler))
-	fmt.Println("Server started at :8080")
-	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
 }
