@@ -15,8 +15,9 @@ import (
 )
 
 type BuildRequest struct {
-	RepoURL  string `json:"repo_url"`
-	Platform string `json:"platform"`
+	RepoURL     string `json:"repo_url"`
+	Platform    string `json:"platform"`
+	PackagePath string `json:"package_path"`
 }
 
 func generateTimestampID() string {
@@ -39,7 +40,7 @@ func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
 	return nil
 }
 
-func buildApp(ctx context.Context, clonePath, platform, outputFile string) error {
+func buildApp(ctx context.Context, packagePath, platform, outputFile string) error {
 	// Validate the platform
 	validPlatforms := map[string]bool{"android": true, "ios": true}
 	if !validPlatforms[platform] {
@@ -48,7 +49,7 @@ func buildApp(ctx context.Context, clonePath, platform, outputFile string) error
 
 	// Build the app using EAS CLI
 	buildCmd := exec.CommandContext(ctx, "eas", "build", "--platform", platform, "--local", "--output", outputFile)
-	buildCmd.Dir = clonePath
+	buildCmd.Dir = packagePath
 	buildCmd.Env = os.Environ() // Inherit the environment
 
 	if output, err := buildCmd.CombinedOutput(); err != nil {
@@ -56,9 +57,21 @@ func buildApp(ctx context.Context, clonePath, platform, outputFile string) error
 	}
 
 	// Check if the built file exists
-	builtFilePath := filepath.Join(clonePath, outputFile)
+	builtFilePath := filepath.Join(packagePath, outputFile)
 	if _, err := os.Stat(builtFilePath); os.IsNotExist(err) {
 		return fmt.Errorf("built app file not found at %s", builtFilePath)
+	}
+
+	return nil
+}
+
+func runNpmInstall(ctx context.Context, packagePath string) error {
+	installCmd := exec.CommandContext(ctx, "npm", "install")
+	installCmd.Dir = packagePath
+	installCmd.Env = os.Environ() // Inherit the environment
+
+	if output, err := installCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("error running npm install: %v, output: %s", err, string(output))
 	}
 
 	return nil
@@ -75,7 +88,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input
-	if req.RepoURL == "" || req.Platform == "" {
+	if req.RepoURL == "" || req.Platform == "" || req.PackagePath == "" {
 		http.Error(w, "Missing required parameters", http.StatusBadRequest)
 		return
 	}
@@ -101,6 +114,14 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Run npm install in the package directory
+	packagePath := filepath.Join(clonePath, req.PackagePath)
+	if err := runNpmInstall(ctx, packagePath); err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to install npm dependencies", http.StatusInternalServerError)
+		return
+	}
+
 	// Define the output file based on the platform and build ID
 	var outputFile, contentType, outputFilename string
 	switch req.Platform {
@@ -115,14 +136,14 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the app
-	if err := buildApp(ctx, clonePath, req.Platform, outputFile); err != nil {
+	if err := buildApp(ctx, packagePath, req.Platform, outputFile); err != nil {
 		log.Println(err)
 		http.Error(w, "Failed to build the app", http.StatusInternalServerError)
 		return
 	}
 
 	// Serve the built app
-	builtFilePath := filepath.Join(clonePath, outputFile)
+	builtFilePath := filepath.Join(packagePath, outputFile)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outputFilename))
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileSize(builtFilePath)))

@@ -14,18 +14,26 @@ HTTP_STATUS=$(curl -s -w "%{http_code}" \
      -H "Content-Type: application/json" \
      -X POST http://$SERVER_IP:8080/build \
      -d '{
-           "repo_url": "https://github.com/yourusername/your-repo.git",
-           "platform": "android"
+           "repo_url": "https://github.com/jdu211171/parents-monolithic.git",
+           "platform": "android",
+           "package_path": "parent-notification"
          }' \
-     -o app.apk)
+     -o $TMP_RESPONSE)
 
 if [ "$HTTP_STATUS" -eq 200 ]; then
-    echo "APK downloaded as app.apk"
-    rm -f $TMP_RESPONSE
+    # Extract the filename from the Content-Disposition header
+    FILENAME=$(grep -o -E 'filename="[^"]+"' $TMP_RESPONSE | sed 's/filename="//;s/"//')
+    if [ -z "$FILENAME" ]; then
+        FILENAME="app.apk"
+    fi
+
+    # Move the temporary response file to the final filename
+    mv $TMP_RESPONSE $FILENAME
+    echo "APK downloaded as $FILENAME"
 else
     echo "Failed to build the app. HTTP status code: $HTTP_STATUS"
     echo "Server response:"
-    cat app.apk  # Output the server's error message
-    rm -f app.apk
+    cat $TMP_RESPONSE  # Output the server's error message
+    rm -f $TMP_RESPONSE
     exit 1
 fi
