@@ -31,8 +31,8 @@ func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
 		return fmt.Errorf("invalid repoURL parameter")
 	}
 
-	// Clone the repository
-	cloneCmd := exec.CommandContext(ctx, "git", "clone", repoURL, clonePath)
+	// Clone the repository with --depth 1 to perform a shallow clone
+	cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", repoURL, clonePath)
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
 	}
