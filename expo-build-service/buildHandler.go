@@ -83,12 +83,14 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req BuildRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Println("Invalid request payload:", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
 	// Validate input
 	if req.RepoURL == "" || req.Platform == "" || req.PackagePath == "" {
+		log.Println("Missing required parameters")
 		http.Error(w, "Missing required parameters", http.StatusBadRequest)
 		return
 	}
@@ -109,7 +111,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Clone the repository
 	if err := cloneOrUpdateRepo(ctx, req.RepoURL, clonePath); err != nil {
-		log.Println(err)
+		log.Println("Failed to clone the repository:", err)
 		http.Error(w, "Failed to clone the repository", http.StatusInternalServerError)
 		return
 	}
@@ -117,7 +119,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	// Run npm install in the package directory
 	packagePath := filepath.Join(clonePath, req.PackagePath)
 	if err := runNpmInstall(ctx, packagePath); err != nil {
-		log.Println(err)
+		log.Println("Failed to install npm dependencies:", err)
 		http.Error(w, "Failed to install npm dependencies", http.StatusInternalServerError)
 		return
 	}
@@ -137,7 +139,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Build the app
 	if err := buildApp(ctx, packagePath, req.Platform, outputFile); err != nil {
-		log.Println(err)
+		log.Println("Failed to build the app:", err)
 		http.Error(w, "Failed to build the app", http.StatusInternalServerError)
 		return
 	}
@@ -165,6 +167,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 func fileSize(filePath string) int64 {
 	info, err := os.Stat(filePath)
 	if err != nil {
+		log.Println("Failed to get file size:", err)
 		return 0
 	}
 	return info.Size()
@@ -180,6 +183,7 @@ func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
 		if token != "Bearer your-secret-token" {
+			log.Println("Unauthorized access attempt")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

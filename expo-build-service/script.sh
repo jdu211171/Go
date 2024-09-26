@@ -9,7 +9,7 @@ TMP_RESPONSE=$(mktemp)
 # Start the build and download the APK
 echo "Starting the build and downloading the APK..."
 
-HTTP_STATUS=$(curl -s -w "%{http_code}" \
+HTTP_STATUS=$(curl -s -v -w "%{http_code}" \
      -H "Authorization: Bearer $AUTH_TOKEN" \
      -H "Content-Type: application/json" \
      -X POST http://$SERVER_IP:8080/build \
@@ -18,7 +18,7 @@ HTTP_STATUS=$(curl -s -w "%{http_code}" \
            "platform": "android",
            "package_path": "parent-notification"
          }' \
-     -o $TMP_RESPONSE)
+     -o $TMP_RESPONSE 2>&1)
 
 if [ "$HTTP_STATUS" -eq 200 ]; then
     # Extract the filename from the Content-Disposition header
