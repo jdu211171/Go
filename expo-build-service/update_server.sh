@@ -4,7 +4,7 @@ set -e  # Exit immediately if a command exits with a non-zero status
 
 echo "Starting server update..."
 
-cd .
+cd /home/distro/Go/expo-build-server  # Ensure you are in the correct directory
 
 # Pull the latest code
 git fetch --all
