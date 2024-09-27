@@ -9,15 +9,23 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 )
 
+// Declare the mutex and the flag at the package level
+var updateMutex sync.Mutex
+var updateInProgress bool
+
 type BuildRequest struct {
-	RepoURL     string `json:"repo_url"`
-	Platform    string `json:"platform"`
-	PackagePath string `json:"package_path"`
+	RepoURL      string `json:"repo_url"`
+	Platform     string `json:"platform"`
+	PackagePath  string `json:"package_path"`
+	UpdateServer bool   `json:"update_server"`
 }
 
 func generateTimestampID() string {
@@ -88,6 +96,14 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Authenticate the request (assuming you have an authentication middleware)
+	token := r.Header.Get("Authorization")
+	if token != "Bearer your-secret-token" {
+		log.Println("Unauthorized access attempt")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Validate input
 	if req.RepoURL == "" || req.Platform == "" || req.PackagePath == "" {
 		log.Println("Missing required parameters")
@@ -95,6 +111,40 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Handle UpdateServer request
+	if req.UpdateServer {
+		updateMutex.Lock()
+		if updateInProgress {
+			updateMutex.Unlock()
+			http.Error(w, "Update already in progress", http.StatusConflict)
+			return
+		}
+		updateInProgress = true
+		updateMutex.Unlock()
+
+		go func() {
+			defer func() {
+				updateMutex.Lock()
+				updateInProgress = false
+				updateMutex.Unlock()
+			}()
+
+			// Run the update script
+			cmd := exec.Command("update_server.sh")
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Printf("Update failed: %v\n%s", err, string(output))
+			} else {
+				log.Println("Update completed successfully.")
+			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Server update initiated.")
+		return
+	}
+
+	// Proceed with the existing build logic
 	// Generate a timestamp-based ID for this build
 	buildID := generateTimestampID()
 
@@ -135,6 +185,10 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		outputFilename = fmt.Sprintf("app-%s.ipa", buildID)
 		outputFile = outputFilename
 		contentType = "application/octet-stream"
+	default:
+		log.Println("Unsupported platform:", req.Platform)
+		http.Error(w, "Unsupported platform", http.StatusBadRequest)
+		return
 	}
 
 	// Build the app
@@ -174,9 +228,36 @@ func fileSize(filePath string) int64 {
 }
 
 func main() {
+	srv := &http.Server{
+		Addr: "0.0.0.0:8080",
+	}
+
+	// Register your handlers
 	http.HandleFunc("/build", authenticate(buildHandler))
+	// ... register other handlers if necessary ...
+
+	// Start the server in a goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+	log.Println("Server started at :8080")
 	fmt.Println("Server started at :8080")
-	log.Fatal(http.ListenAndServe("0.0.0.0:8080", nil))
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exiting")
 }
 
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
