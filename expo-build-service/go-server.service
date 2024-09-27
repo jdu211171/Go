@@ -4,10 +4,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=youruser
-Group=yourgroup
-WorkingDirectory=~/Go/expo-build-server
-ExecStart=~/Go/expo-build-server/buildHandler
+User=distro
+Group=distro
+WorkingDirectory=/home/distro/Go/expo-build-server
+ExecStart=/home/distro/Go/expo-build-server/buildHandler
 Restart=on-failure
 RestartSec=5s
 Environment=PORT=8080
