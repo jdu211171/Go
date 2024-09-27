@@ -17,9 +17,11 @@ import (
 	"time"
 )
 
+// Mutex to prevent concurrent updates
 var updateMutex sync.Mutex
 var updateInProgress bool
 
+// BuildRequest defines the expected JSON payload for build requests
 type BuildRequest struct {
 	RepoURL      string `json:"repo_url"`
 	Platform     string `json:"platform"`
@@ -27,18 +29,20 @@ type BuildRequest struct {
 	UpdateServer bool   `json:"update_server"`
 }
 
+// Generate a timestamp-based ID for builds
 func generateTimestampID() string {
 	timestamp := time.Now().Format("20060102-1504") // YearMonthDay-HourMinute
 	return timestamp
 }
 
+// Clone or update the repository
 func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
 	// Validate input to prevent command injection or path traversal attacks
-	if strings.Contains(repoURL, ";") || strings.Contains(repoURL, "&") {
+	if strings.ContainsAny(repoURL, ";&") {
 		return fmt.Errorf("invalid repoURL parameter")
 	}
 
-	// Clone the repository with --depth 1 to perform a shallow clone
+	// Clone the repository with --depth 1 for a shallow clone
 	cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", repoURL, clonePath)
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
@@ -47,6 +51,7 @@ func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
 	return nil
 }
 
+// Build the application using EAS CLI
 func buildApp(ctx context.Context, packagePath, platform, outputFile string) error {
 	// Validate the platform
 	validPlatforms := map[string]bool{"android": true, "ios": true}
@@ -72,6 +77,7 @@ func buildApp(ctx context.Context, packagePath, platform, outputFile string) err
 	return nil
 }
 
+// Run npm install in the specified package directory
 func runNpmInstall(ctx context.Context, packagePath string) error {
 	installCmd := exec.CommandContext(ctx, "npm", "install")
 	installCmd.Dir = packagePath
@@ -84,6 +90,7 @@ func runNpmInstall(ctx context.Context, packagePath string) error {
 	return nil
 }
 
+// Handle build requests
 func buildHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)
 	defer cancel()
@@ -95,14 +102,6 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticate the request (assuming you have an authentication middleware)
-	token := r.Header.Get("Authorization")
-	if token != "Bearer your-secret-token" {
-		log.Println("Unauthorized access attempt")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	// Validate input
 	if req.RepoURL == "" || req.Platform == "" || req.PackagePath == "" {
 		log.Println("Missing required parameters")
@@ -110,41 +109,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Handle UpdateServer request
-	if req.UpdateServer {
-		updateMutex.Lock()
-		if updateInProgress {
-			updateMutex.Unlock()
-			http.Error(w, "Update already in progress", http.StatusConflict)
-			return
-		}
-		updateInProgress = true
-		updateMutex.Unlock()
-
-		go func() {
-			defer func() {
-				updateMutex.Lock()
-				updateInProgress = false
-				updateMutex.Unlock()
-			}()
-
-			// Run the update script
-			cmd := exec.Command("update_server.sh")
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Printf("Update failed: %v\n%s", err, string(output))
-			} else {
-				log.Println("Update completed successfully.")
-			}
-		}()
-
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "Server update initiated.")
-		return
-	}
-
-	// Proceed with the existing build logic
-	// Generate a timestamp-based ID for this build
+	// Proceed with the build logic
 	buildID := generateTimestampID()
 
 	// Create a temporary directory for this build
@@ -217,6 +182,48 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Handle update requests
+func updateHandler(w http.ResponseWriter, r *http.Request) {
+	// Authenticate the request
+	token := r.Header.Get("Authorization")
+	if token != "Bearer your-secret-token" {
+		log.Println("Unauthorized access attempt")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Trigger the update process
+	updateMutex.Lock()
+	if updateInProgress {
+		updateMutex.Unlock()
+		http.Error(w, "Update already in progress", http.StatusConflict)
+		return
+	}
+	updateInProgress = true
+	updateMutex.Unlock()
+
+	go func() {
+		defer func() {
+			updateMutex.Lock()
+			updateInProgress = false
+			updateMutex.Unlock()
+		}()
+
+		// Run the update script
+		cmd := exec.Command("/home/distro/Go/expo-build-server/update_server.sh")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("Update failed: %v\n%s", err, string(output))
+		} else {
+			log.Println("Update completed successfully.")
+		}
+	}()
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Server update initiated.")
+}
+
+// Get the size of a file
 func fileSize(filePath string) int64 {
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -226,6 +233,13 @@ func fileSize(filePath string) int64 {
 	return info.Size()
 }
 
+// Health check handler
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Server is up and running.")
+}
+
+// Graceful shutdown
 func main() {
 	srv := &http.Server{
 		Addr: "0.0.0.0:8080",
@@ -233,7 +247,8 @@ func main() {
 
 	// Register your handlers
 	http.HandleFunc("/build", authenticate(buildHandler))
-	// ... register other handlers if necessary ...
+	http.HandleFunc("/update", updateHandler)
+	http.HandleFunc("/health", healthHandler)
 
 	// Start the server in a goroutine
 	go func() {
@@ -259,6 +274,7 @@ func main() {
 	log.Println("Server exiting")
 }
 
+// Authentication middleware
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
