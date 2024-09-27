@@ -1,16 +1,14 @@
 [Unit]
 Description=Go Server Service
-After=network.target
 
 [Service]
 Type=simple
-User=distro
-Group=distro
-WorkingDirectory=/home/distro/Go/expo-build-server
-ExecStart=/home/distro/Go/expo-build-server/buildHandler
+User=root
+ExecStart=/bin/bash /home/distro/Go/expo-build-server/buildHandler
 Restart=on-failure
 RestartSec=5s
 Environment=PORT=8080
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
