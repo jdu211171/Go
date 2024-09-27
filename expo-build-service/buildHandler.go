@@ -17,7 +17,6 @@ import (
 	"time"
 )
 
-// Declare the mutex and the flag at the package level
 var updateMutex sync.Mutex
 var updateInProgress bool
 
