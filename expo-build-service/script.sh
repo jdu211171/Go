@@ -1,7 +1,5 @@
-#!/bin/bash
-
-SERVER_IP="192.168.0.106"
-AUTH_TOKEN="your-secret-token"
+SERVER_IP="192.168.0.106"             # Replace with your server's IP address
+AUTH_TOKEN="your-secret-token"        # Replace with your actual token
 
 # Function to trigger server update
 trigger_update() {
@@ -9,7 +7,7 @@ trigger_update() {
     HTTP_STATUS=$(curl -s -w "%{http_code}" \
          -H "Authorization: Bearer $AUTH_TOKEN" \
          -H "Content-Type: application/json" \
-         -X POST http://$SERVER_IP:8080/build \
+         -X POST http://$SERVER_IP:8080/update \
          -d '{
                "repo_url": "https://github.com/jdu211171/parents-monolithic.git",
                "platform": "android",
@@ -41,11 +39,16 @@ build_and_download() {
                "package_path": "parent-notification",
                "update_server": false
              }' \
+         -D - \
          -o $TMP_RESPONSE)
 
-    if [ "$HTTP_STATUS" -eq 200 ]; then
+    # Extract the HTTP status code
+    HTTP_CODE=$(echo "$HTTP_STATUS" | tail -n1)
+
+    if [ "$HTTP_CODE" -eq 200 ]; then
         # Extract the filename from the Content-Disposition header
-        FILENAME=$(grep -o -E 'filename="[^"]+"' $TMP_RESPONSE | sed 's/filename="//;s/"//')
+        FILENAME=$(grep -i -E 'Content-Disposition:.*filename="[^"]+"' $TMP_RESPONSE | sed 's/Content-Disposition: .*filename="//;s/"//')
+
         if [ -z "$FILENAME" ]; then
             FILENAME="app.apk"
         fi
@@ -54,7 +57,7 @@ build_and_download() {
         mv $TMP_RESPONSE $FILENAME
         echo "APK downloaded as $FILENAME"
     else
-        echo "Failed to build the app. HTTP status code: $HTTP_STATUS"
+        echo "Failed to build the app. HTTP status code: $HTTP_CODE"
         echo "Server response:"
         cat $TMP_RESPONSE  # Output the server's error message
         rm -f $TMP_RESPONSE
@@ -62,12 +65,15 @@ build_and_download() {
     fi
 }
 
-# Trigger server update
+# Execute the functions
 trigger_update
 
 # Wait for the server to restart
 echo "Waiting for the server to restart..."
-sleep 60  # Adjust the sleep duration as needed
+sleep 60  # Adjust the sleep duration based on your update process
 
 # Build and download the APK
 build_and_download
+
+# sudo chown -R distro:distro /home/distro/Go/expo-build-service
+# sudo chmod -R 755 /home/distro/Go/expo-build-service

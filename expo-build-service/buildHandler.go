@@ -210,10 +210,10 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		// Run the update script
-		cmd := exec.Command("/home/distro/Go/expo-build-server/update_server.sh")
+		cmd := exec.Command("/home/distro/Go/expo-build-service/update_server.sh")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Printf("Update failed: %v\n%s", err, string(output))
+			log.Printf("Update failed: %v\nOutput: %s", err, string(output))
 		} else {
 			log.Println("Update completed successfully.")
 		}

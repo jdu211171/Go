@@ -9,7 +9,7 @@ Group=distro
 WorkingDirectory=/home/distro/Go/expo-build-service
 ExecStart=/home/distro/Go/expo-build-service/buildHandler
 Restart=on-failure
-RestartSec=5s
+RestartSec=10s
 Environment=PORT=8080
 
 [Install]
