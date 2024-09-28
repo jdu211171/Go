@@ -4,7 +4,7 @@ set -e  # Exit immediately if a command exits with a non-zero status
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Starting server update..." | tee -a /home/distro/Go/expo-build-server/update.log
 
-cd /home/distro/Go/expo-build-server
+cd /home/distro/Go/expo-build-service
 
 # Pull the latest code
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Pulling latest code..." | tee -a update.log

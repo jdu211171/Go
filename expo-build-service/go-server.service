@@ -6,8 +6,8 @@ After=network.target
 Type=simple
 User=distro
 Group=distro
-WorkingDirectory=/home/distro/Go/expo-build-server
-ExecStart=/home/distro/Go/expo-build-server/buildHandler
+WorkingDirectory=/home/distro/Go/expo-build-service
+ExecStart=/home/distro/Go/expo-build-service/buildHandler
 Restart=on-failure
 RestartSec=5s
 Environment=PORT=8080
