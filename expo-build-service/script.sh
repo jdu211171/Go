@@ -74,6 +74,3 @@ sleep 60  # Adjust the sleep duration based on your update process
 
 # Build and download the APK
 build_and_download
-
-# sudo chown -R distro:distro /home/distro/Go/expo-build-service
-# sudo chmod -R 755 /home/distro/Go/expo-build-service
