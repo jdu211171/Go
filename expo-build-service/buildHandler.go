@@ -251,7 +251,7 @@ func main() {
 
 	// Register your handlers
 	http.HandleFunc("/build", authenticate(buildHandler))
-	http.HandleFunc("/update", authenticate(updateHandler))
+	http.HandleFunc("/update", updateHandler)
 	http.HandleFunc("/health", healthHandler)
 
 	// Start the server in a goroutine
