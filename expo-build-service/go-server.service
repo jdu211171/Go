@@ -1,3 +1,4 @@
+# /etc/systemd/system/go-server.service
 [Unit]
 Description=Go Server Service
 After=network.target
@@ -9,8 +10,9 @@ Group=distro
 WorkingDirectory=/home/distro/Go/expo-build-service
 ExecStart=/home/distro/Go/expo-build-service/buildHandler
 Restart=on-failure
-RestartSec=10s
+RestartSec=5s
 Environment=PORT=8080
+Environment=AUTH_TOKEN=your-secret-token  # Add this line
 
 [Install]
 WantedBy=multi-user.target
