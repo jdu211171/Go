@@ -196,6 +196,7 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	updateMutex.Lock()
 	if updateInProgress {
 		updateMutex.Unlock()
+		log.Println("Update already in progress")
 		http.Error(w, "Update already in progress", http.StatusConflict)
 		return
 	}
@@ -241,6 +242,9 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // Graceful shutdown
 func main() {
+	// Initialize logging
+	initLogging()
+
 	srv := &http.Server{
 		Addr: "0.0.0.0:8080",
 	}
@@ -252,12 +256,12 @@ func main() {
 
 	// Start the server in a goroutine
 	go func() {
+		log.Println("Server started at :8080")
+		fmt.Println("Server started at :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}()
-	log.Println("Server started at :8080")
-	fmt.Println("Server started at :8080")
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
@@ -278,11 +282,38 @@ func main() {
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
-		if token != "Bearer your-secret-token" {
+		expectedToken := os.Getenv("AUTH_TOKEN")
+		if token != "Bearer "+expectedToken {
 			log.Println("Unauthorized access attempt")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
 	}
+}
+
+// Initialize logging to a file
+func initLogging() {
+	logDir := "/home/distro/Go/expo-build-service/logs"
+	logFile := filepath.Join(logDir, "server.log")
+
+	// Create log directory if it doesn't exist
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		err := os.MkdirAll(logDir, 0755)
+		if err != nil {
+			log.Fatalf("Failed to create log directory: %v", err)
+		}
+	}
+
+	// Open log file in append mode, create if not exists
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open log file %s: %v", logFile, err)
+	}
+
+	// Set log output to the file
+	log.SetOutput(file)
+
+	// Set log flags to include date and time
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
