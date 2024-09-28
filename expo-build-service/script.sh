@@ -1,5 +1,5 @@
 SERVER_IP="192.168.0.106"             # Replace with your server's IP address
-AUTH_TOKEN="AUTH_TOKEN"        # Replace with your actual token
+AUTH_TOKEN="your-secret-token"        # Replace with your actual token
 
 # Function to trigger server update
 trigger_update() {
