@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to the update log
-LOG_FILE="/home/distro/Go/expo-build-service/update.log"
+LOG_FILE="/home/distro/Go/expo-build-service/logs/server.log"
 
 # Ensure the script is executed from the correct directory
 cd /home/distro/Go/expo-build-service || { echo "Failed to change directory to /home/distro/Go/expo-build-service"; exit 1; }
