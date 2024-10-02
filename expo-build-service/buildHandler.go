@@ -333,7 +333,7 @@ func main() {
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("Authorization")
-		expectedToken := "your-secret-token"
+		expectedToken := os.Getenv("AUTH_TOKEN")
 		if token != "Bearer "+expectedToken {
 			log.Println("Unauthorized access attempt")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
