@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,11 +16,20 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // Mutex to prevent concurrent updates
 var updateMutex sync.Mutex
 var updateInProgress bool
+
+// WebSocket upgrader
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 // BuildRequest defines the expected JSON payload for build requests
 type BuildRequest struct {
@@ -90,6 +100,34 @@ func runNpmInstall(ctx context.Context, packagePath string) error {
 	return nil
 }
 
+// Tail the log file and send updates to the WebSocket connection
+func tailLogFile(ws *websocket.Conn, logFilePath string, done chan struct{}) {
+	file, err := os.Open(logFilePath)
+	if err != nil {
+		log.Println("Failed to open log file:", err)
+		return
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if err := ws.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
+				log.Println("Failed to send log message:", err)
+				return
+			}
+		}
+	}
+}
+
 // Handle build requests
 func buildHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)
@@ -108,6 +146,14 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing required parameters", http.StatusBadRequest)
 		return
 	}
+
+	// Upgrade the connection to WebSocket
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Failed to upgrade to WebSocket:", err)
+		return
+	}
+	defer ws.Close()
 
 	// Proceed with the build logic
 	buildID := generateTimestampID()
@@ -155,10 +201,15 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Tail the log file
+	done := make(chan struct{})
+	go tailLogFile(ws, "/home/distro/Go/expo-build-service/logs/server.log", done)
+
 	// Build the app
 	if err := buildApp(ctx, packagePath, req.Platform, outputFile); err != nil {
 		log.Println("Failed to build the app:", err)
 		http.Error(w, "Failed to build the app", http.StatusInternalServerError)
+		close(done)
 		return
 	}
 
@@ -173,6 +224,7 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println("Failed to open built file:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		close(done)
 		return
 	}
 	defer file.Close()
@@ -180,6 +232,9 @@ func buildHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, file); err != nil {
 		log.Println("Failed to send file to client:", err)
 	}
+
+	// Stop tailing the log file
+	close(done)
 }
 
 // Handle update requests
@@ -192,6 +247,14 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Upgrade the connection to WebSocket
+	ws, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Failed to upgrade to WebSocket:", err)
+		return
+	}
+	defer ws.Close()
+
 	// Trigger the update process
 	updateMutex.Lock()
 	if updateInProgress {
@@ -203,11 +266,15 @@ func updateHandler(w http.ResponseWriter, r *http.Request) {
 	updateInProgress = true
 	updateMutex.Unlock()
 
+	done := make(chan struct{})
+	go tailLogFile(ws, "/home/distro/Go/expo-build-service/logs/server.log", done)
+
 	go func() {
 		defer func() {
 			updateMutex.Lock()
 			updateInProgress = false
 			updateMutex.Unlock()
+			close(done)
 		}()
 
 		// Run the update script

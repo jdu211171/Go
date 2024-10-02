@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"io"
 )
 
 type application struct {
@@ -41,9 +41,9 @@ func main() {
 	mux.HandleFunc("/snippet/create", app.snippetCreate)
 
 	srv := &http.Server{
-		Addr: *addr,
+		Addr:     *addr,
 		ErrorLog: errorLog,
-		Handler: mux,
+		Handler:  app.routes(),
 	}
 
 	infoLog.Printf("Starting server on %s", *addr)

@@ -1,1 +1,60 @@
 INFO	2024/09/21 06:49:10 Starting server on :4000
+INFO	2024/10/02 07:16:00 Starting server on :4000
+ERROR	2024/10/02 07:16:24 helpers.go:11: 2 open ./ui/html/pages/home.tmpl: no such file or directory
+goroutine 6 [running]:
+runtime/debug.Stack()
+	/usr/lib/golang/src/runtime/debug/stack.go:24 +0x5e
+main.(*application).serverError(0xc000016180, {0x85a128, 0xc000130000}, {0x858480?, 0xc000110780?})
+	/home/geek/Zed/Go/letsgo/cmd/web/helpers.go:10 +0x5d
+main.(*application).home(0xc000016180, {0x85a128, 0xc000130000}, 0x7f186950c5b8?)
+	/home/geek/Zed/Go/letsgo/cmd/web/handlers.go:24 +0x1cc
+net/http.HandlerFunc.ServeHTTP(0xc0000a8ea0?, {0x85a128?, 0xc000130000?}, 0x70821a?)
+	/usr/lib/golang/src/net/http/server.go:2166 +0x29
+net/http.(*ServeMux).ServeHTTP(0x46b979?, {0x85a128, 0xc000130000}, 0xc000120000)
+	/usr/lib/golang/src/net/http/server.go:2683 +0x1ad
+net/http.serverHandler.ServeHTTP({0xc000110030?}, {0x85a128?, 0xc000130000?}, 0x6?)
+	/usr/lib/golang/src/net/http/server.go:3137 +0x8e
+net/http.(*conn).serve(0xc0000f2000, {0x85a890, 0xc0000a7170})
+	/usr/lib/golang/src/net/http/server.go:2039 +0x5e8
+created by net/http.(*Server).Serve in goroutine 1
+	/usr/lib/golang/src/net/http/server.go:3285 +0x4b4
+
+ERROR	2024/10/02 07:16:53 helpers.go:11: 2 open ./ui/html/pages/home.tmpl: no such file or directory
+goroutine 19 [running]:
+runtime/debug.Stack()
+	/usr/lib/golang/src/runtime/debug/stack.go:24 +0x5e
+main.(*application).serverError(0xc000016180, {0x85a128, 0xc0001301c0}, {0x858480?, 0xc000110f60?})
+	/home/geek/Zed/Go/letsgo/cmd/web/helpers.go:10 +0x5d
+main.(*application).home(0xc000016180, {0x85a128, 0xc0001301c0}, 0x7f186950c5b8?)
+	/home/geek/Zed/Go/letsgo/cmd/web/handlers.go:24 +0x1cc
+net/http.HandlerFunc.ServeHTTP(0xc0000a8ea0?, {0x85a128?, 0xc0001301c0?}, 0x70821a?)
+	/usr/lib/golang/src/net/http/server.go:2166 +0x29
+net/http.(*ServeMux).ServeHTTP(0x46b979?, {0x85a128, 0xc0001301c0}, 0xc0001207e0)
+	/usr/lib/golang/src/net/http/server.go:2683 +0x1ad
+net/http.serverHandler.ServeHTTP({0xc000110870?}, {0x85a128?, 0xc0001301c0?}, 0x6?)
+	/usr/lib/golang/src/net/http/server.go:3137 +0x8e
+net/http.(*conn).serve(0xc000122120, {0x85a890, 0xc0000a7170})
+	/usr/lib/golang/src/net/http/server.go:2039 +0x5e8
+created by net/http.(*Server).Serve in goroutine 1
+	/usr/lib/golang/src/net/http/server.go:3285 +0x4b4
+
+INFO	2024/10/02 07:19:17 Starting server on :4000
+ERROR	2024/10/02 07:19:20 handlers.go:24: open ./ui/html/pages/home.tmpl: no such file or directory
+goroutine 19 [running]:
+runtime/debug.Stack()
+	/usr/lib/golang/src/runtime/debug/stack.go:24 +0x5e
+main.(*application).serverError(0xc000118130, {0x85a0e8, 0xc000202380}, {0x858440?, 0xc00011d9b0?})
+	/home/geek/Zed/Go/letsgo/cmd/web/helpers.go:10 +0x52
+main.(*application).home(0xc000118130, {0x85a0e8, 0xc000202380}, 0x7fc5121c05b8?)
+	/home/geek/Zed/Go/letsgo/cmd/web/handlers.go:24 +0x1cc
+net/http.HandlerFunc.ServeHTTP(0xc00011ef70?, {0x85a0e8?, 0xc000202380?}, 0x70821a?)
+	/usr/lib/golang/src/net/http/server.go:2166 +0x29
+net/http.(*ServeMux).ServeHTTP(0x46b979?, {0x85a0e8, 0xc000202380}, 0xc00014c480)
+	/usr/lib/golang/src/net/http/server.go:2683 +0x1ad
+net/http.serverHandler.ServeHTTP({0xc00011d260?}, {0x85a0e8?, 0xc000202380?}, 0x6?)
+	/usr/lib/golang/src/net/http/server.go:3137 +0x8e
+net/http.(*conn).serve(0xc000218000, {0x85a850, 0xc00011d170})
+	/usr/lib/golang/src/net/http/server.go:2039 +0x5e8
+created by net/http.(*Server).Serve in goroutine 1
+	/usr/lib/golang/src/net/http/server.go:3285 +0x4b4
+INFO	2024/10/02 07:20:21 Starting server on :4000
