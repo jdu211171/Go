@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SERVER_IP="192.168.0.106"  # Replace with your server's IP address
+SERVER_IP="10.20.13.221"  # Replace with your server's IP address
 AUTH_TOKEN="your-secret-token"  # Replace with your actual token
 
 # Function to trigger server update
@@ -26,6 +26,7 @@ build_and_download() {
 
     HTTP_STATUS=$(curl -s -w "%{http_code}" \
          -H "Content-Type: application/json" \
+         -H "Authorization: Bearer $AUTH_TOKEN" \
          -X POST http://$SERVER_IP:8080/build \
          -d '{
                "repo_url": "https://github.com/jdu211171/parents-monolithic.git",
@@ -59,11 +60,11 @@ build_and_download() {
 }
 
 # Execute the functions
-trigger_update
+# trigger_update
 
 # Wait for the server to restart
-echo "Waiting for the server to restart..."
-sleep 60  # Adjust the sleep duration based on your update process
+# echo "Waiting for the server to restart..."
+# sleep 60  # Adjust the sleep duration based on your update process
 
 # Build and download the APK
 build_and_download
