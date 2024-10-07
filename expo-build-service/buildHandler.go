@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,26 +39,33 @@ func generateTimestampID() string {
 
 // Clone or update the repository
 func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
-	// Validate input to prevent command injection or path traversal attacks
-	if strings.ContainsAny(repoURL, ";&") {
-		return fmt.Errorf("invalid repoURL parameter")
-	}
+    if strings.ContainsAny(repoURL, ";&") {
+        return fmt.Errorf("invalid repoURL parameter")
+    }
 
-	// Clone the repository with --depth 1 for a shallow clone
-	cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--single-branch", "--branch", "main", repoURL, clonePath)
-	if output, err := cloneCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
-	}
+    // Create the parent directory if it doesn't exist
+    if err := os.MkdirAll(filepath.Dir(clonePath), 0755); err != nil {
+        return fmt.Errorf("error creating parent directory: %v", err)
+    }
 
-	// Set the GIT_TERMINAL_PROMPT environment variable to prevent interactive prompts
-	cloneCmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+    // Perform a shallow clone of the main branch
+    cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--single-branch", "--branch", "main", repoURL, clonePath)
 
-	// Combine stdout and stderr
-	output, err := cloneCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
-	}
-	return nil
+    // Set the GIT_TERMINAL_PROMPT environment variable to prevent interactive prompts
+    cloneCmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+    // Use a buffer to capture output
+    var output bytes.Buffer
+    cloneCmd.Stdout = &output
+    cloneCmd.Stderr = &output
+
+    // Run the command
+    err := cloneCmd.Run()
+    if err != nil {
+        return fmt.Errorf("error cloning repository: %v, output: %s", err, output.String())
+    }
+
+    return nil
 }
 
 // Build the application using EAS CLI
