@@ -1,21 +1,14 @@
 #!/bin/bash
 
-SERVER_IP="192.168.0.106"             # Replace with your server's IP address
-AUTH_TOKEN="your-secret-token"        # Replace with your actual token
+SERVER_IP="192.168.0.106"  # Replace with your server's IP address
+AUTH_TOKEN="your-secret-token"  # Replace with your actual token
 
 # Function to trigger server update
 trigger_update() {
     echo "Triggering server update..."
     HTTP_STATUS=$(curl -s -w "%{http_code}" \
          -H "Authorization: Bearer $AUTH_TOKEN" \
-         -H "Content-Type: application/json" \
-         -X POST http://$SERVER_IP:8080/update \
-         -d '{
-               "repo_url": "https://github.com/jdu211171/parents-monolithic.git",
-               "platform": "android",
-               "package_path": "parent-notification",
-               "update_server": true
-             }' \
+         -X GET http://$SERVER_IP:8080/update \
          -o /dev/null)
 
     if [ "$HTTP_STATUS" -eq 200 ]; then
@@ -32,14 +25,12 @@ build_and_download() {
     echo "Starting the build and downloading the APK..."
 
     HTTP_STATUS=$(curl -s -w "%{http_code}" \
-         -H "Authorization: Bearer $AUTH_TOKEN" \
          -H "Content-Type: application/json" \
          -X POST http://$SERVER_IP:8080/build \
          -d '{
                "repo_url": "https://github.com/jdu211171/parents-monolithic.git",
                "platform": "android",
-               "package_path": "parent-notification",
-               "update_server": false
+               "package_path": "parent-notification"
              }' \
          -D - \
          -o $TMP_RESPONSE)
@@ -76,3 +67,5 @@ sleep 60  # Adjust the sleep duration based on your update process
 
 # Build and download the APK
 build_and_download
+
+# curl -H "Authorization: Bearer your-secret-token" http://192.168.0.106:8080/update
