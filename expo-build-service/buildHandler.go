@@ -44,11 +44,19 @@ func cloneOrUpdateRepo(ctx context.Context, repoURL, clonePath string) error {
 	}
 
 	// Clone the repository with --depth 1 for a shallow clone
-	cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", repoURL, clonePath)
+	cloneCmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--single-branch", "--branch", "main", repoURL, clonePath)
 	if output, err := cloneCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
 	}
 
+	// Set the GIT_TERMINAL_PROMPT environment variable to prevent interactive prompts
+	cloneCmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	// Combine stdout and stderr
+	output, err := cloneCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error cloning repository: %v, output: %s", err, string(output))
+	}
 	return nil
 }
 
